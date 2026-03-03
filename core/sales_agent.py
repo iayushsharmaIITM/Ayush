@@ -643,6 +643,15 @@ Does the user's query relate to problems that Mochan-D's AI chatbot solution can
    If query is about other business areas (accounting, inventory, website, etc.):
    - Set business_opportunity.detected = false
 
+   SALES FUNNEL STAGE DETECTION:
+   Identify where the user is in the sales funnel, and set `sales_stage`:
+   - `info_gathering`: User is asking general questions or gathering info on random topics. Do not pitch but help them.
+   - `hook_pitch`: The conversational moment to subtly pitch Mochan-D based on their inferred use case.
+   - `use_case_refinement`: User shows explicit interest ("converged to sales"); they want to know how it applies strictly to their exact use case.
+   - `solution_proposal`: The previous use case detailing is done, so now proposing a concrete solution (or a customized 'jugaad'/workaround if standard isn't enough).
+   - `demo_cta`: User is satisfied with the solution; provide a CTA like a Sales ROI dashboard demo, video link, or booking appointment.
+   - `payment_invoice`: The deal is closing; user is asking to pay, has paid via Razorpay, or needs a receipt/invoice.
+
 4. TOOL SELECTION FOR MULTI-TASK QUERIES:
 
    For EACH sub-task identified in step 1, select the most appropriate tool:
@@ -731,6 +740,7 @@ Return ONLY valid JSON:
     "detected": true or false,
     "composite_confidence": 0-100,
     "engagement_level": "direct_consultation|gentle_suggestion|empathetic_probing|pure_empathy",
+    "sales_stage": "info_gathering|hook_pitch|use_case_refinement|solution_proposal|demo_cta|payment_invoice",
     "signal_breakdown": {{
       "work_context": 0-100,
       "emotional_distress": 0-100,
@@ -799,6 +809,7 @@ Return ONLY valid JSON:
                 "detected": False,
                 "composite_confidence": 0,
                 "engagement_level": "pure_empathy",
+                "sales_stage": "info_gathering",
                 "signal_breakdown": {
                     "work_context": 0,
                     "emotional_distress": 0,
@@ -1119,6 +1130,7 @@ Return ONLY valid JSON:
         # Extract key elements
         intent = analysis.get('semantic_intent', '')
         business_opp = analysis.get('business_opportunity', {})
+        sales_stage_context = business_opp.get('sales_stage', 'info_gathering')
         sentiment = analysis.get('sentiment', {})
         strategy = analysis.get('response_strategy', {})
         
@@ -1143,6 +1155,7 @@ Return ONLY valid JSON:
         logger.info(f"  RESPONSE GENERATION INPUTS:")
         logger.info(f"   Intent: {intent}")
         logger.info(f"   Business Opportunity Detected: {business_detected}")
+        logger.info(f"   Sales Stage: {sales_stage_context}")
         logger.info(f"   Conversation Mode: {conversation_mode}")
         logger.info(f"   User Emotion: {sentiment.get('primary_emotion', 'casual')}")
         logger.info(f"   Sentiment Guidance: {sentiment_guidance}")
@@ -1187,6 +1200,7 @@ Return ONLY valid JSON:
         - User Intent: {intent}
         - Business Status: {business_detected}
             {f"- Confidence: {business_opp.get('composite_confidence', 0)}/100" if business_detected else ""}
+            {f"- Sales Stage: {sales_stage_context}" if business_detected else ""}
             {f"- Pain Points: {business_opp.get('pain_points', [])}" if business_detected else ""}
             {f"- Solutions: {business_opp.get('solution_areas', [])}" if business_detected else ""}
         - Conversation Mode: {conversation_mode}
@@ -1258,6 +1272,14 @@ Return ONLY valid JSON:
 
         VERY HIGH Opportunity (86-100): Direct consultation - address pain immediately, clear value prop, focus on their ROI, create urgency through value, clear CTA
         Example: "Losing deals to faster competitors - that's money on the table, bhai. Mochan-D gives 24/7 sales with AI that learns YOUR business. Should I show you the setup?"
+
+        DEEP FUNNEL STAGE BEHAVIOR (Given Stage: {sales_stage_context}):
+        - `info_gathering`: Answer their query fully without pressing on your product, but gather info contextually or subtly hook when relevant.
+        - `hook_pitch`: Subtly introduce Mochan-D tailored to their exact use case. Make it smart and empathetic (NO HARD SELLING).
+        - `use_case_refinement`: They are interested. Detail how Mochan-D applies exactly to their setup. Refine the use case conversationally.
+        - `solution_proposal`: Pitch a concrete solution. If they aren't fully satisfied, offer a custom feature/refinement or "jugaad" to benefit them similarly.
+        - `demo_cta`: Provide a clear Call To Action (e.g., a mock link to a Sales ROI Dashboard Demo, a Video, or booking an Appointment: "Let's book a demo here: [Demo Link]").
+        - `payment_invoice`: If they are ready to pay, provide a mock Razorpay payment link. If they confirm payment, generate a text-based "Receipt / Invoice" confirming the sale.
 
         SALES TECHNIQUES:
         - Empathy Hook: "Sounds like..." / "That's rough, yaar..."
