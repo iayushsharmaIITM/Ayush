@@ -336,7 +336,18 @@ async def chat_brain_heart_system(request: ChatMessage = Body(...)):
         safe_log_user_data(user_id, 'brain_heart_chat', message_count=len(user_query))
         
         
-        result = await agent.process_query(user_query, chat_history, user_id)
+        try:
+            result = await asyncio.wait_for(
+                agent.process_query(user_query, chat_history, user_id),
+                timeout=90.0
+            )
+        except asyncio.TimeoutError:
+            logging.warning(f"⏱ Query timed out for user {user_id} after 90s")
+            result = {
+                "success": True,
+                "response": "I'm taking a bit longer to process your request. Let me get back to you shortly — could you try again in a moment?",
+                "analysis": {"business_opportunity": {"detected": False, "sales_stage": "info_gathering", "composite_confidence": 0}},
+            }
         
         if result["success"]:
             safe_log_response(result, level='info')
