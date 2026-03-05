@@ -546,6 +546,14 @@ Perform ALL of the following analyses in ONE response:
      * Describe the violation in `key_points_to_address`.
    - If safe, set `is_safe` to `true`.
 
+   ⚠️ CRITICAL EXCEPTION — These are NOT safety violations:
+   - Aggressive negotiation (demanding discounts, threatening to leave, threatening negative reviews)
+   - Emotional pleas (begging for free service, saying they can't afford it)
+   - Choosing a competitor over Mochan-D
+   - Expressing frustration with pricing or features
+   These are BUSINESS SCENARIOS that need de-escalation, NOT policy violations.
+   For these cases: keep `is_safe` = true, keep `business_opportunity.detected` = true, and handle them with empathy and tactical de-escalation.
+
 1. MULTI-TASK DETECTION & DECOMPOSITION:
    - Analyze the user query to identify if it contains multiple distinct, actionable tasks or questions.
    - Look for:
@@ -637,6 +645,13 @@ Does the user's query relate to problems that Mochan-D's AI chatbot solution can
    - Weather, jokes, casual chat (unless leads to business context)
    - Pet problems, family issues
 
+   ⚠️ BUSINESS CONTEXT PERSISTENCE RULES:
+   - If the conversation history shows an ACTIVE business discussion, keep `detected` = true UNLESS the user completely changes topic to something personal/unrelated.
+   - User choosing a competitor = STILL a business conversation (detected = true, stage = hook_pitch). This is an opportunity to counter-pitch, not a reason to drop context.
+   - User demanding discounts, free service, or threatening negative reviews = STILL a business conversation (detected = true). Handle with empathy and de-escalation.
+   - User expressing emotional distress about their business = STILL a business conversation (detected = true). Respond with empathy AND maintain the sales context.
+   - Only drop `detected` to false if the topic genuinely shifts away from business entirely (e.g., user starts asking about weather, jokes, personal life).
+
    If business opportunity detected:
    - Set business_opportunity.detected = true
 
@@ -644,13 +659,19 @@ Does the user's query relate to problems that Mochan-D's AI chatbot solution can
    - Set business_opportunity.detected = false
 
    SALES FUNNEL STAGE DETECTION:
-   Identify where the user is in the sales funnel, and set `sales_stage`:
-   - `info_gathering`: User is asking general questions or gathering info on random topics. Do not pitch but help them.
-   - `hook_pitch`: The conversational moment to subtly pitch Mochan-D based on their inferred use case.
-   - `use_case_refinement`: User shows explicit interest ("converged to sales"); they want to know how it applies strictly to their exact use case.
-   - `solution_proposal`: The previous use case detailing is done, so now proposing a concrete solution (or a customized 'jugaad'/workaround if standard isn't enough).
-   - `demo_cta`: User is satisfied with the solution; provide a CTA like a Sales ROI dashboard demo, video link, or booking appointment.
-   - `payment_invoice`: The deal is closing; user is asking to pay, has paid via Razorpay, or needs a receipt/invoice.
+   Identify where the user is in the sales funnel based on conversation history and current query. Set `sales_stage`:
+
+   - `info_gathering`: User is asking general questions or gathering info on random topics NOT about Mochan-D specifically. They have NOT asked how Mochan-D solves their problem.
+   - `hook_pitch`: The user is comparing solutions, mentioning competitors, or discussing a problem that Mochan-D can solve — this is the moment to subtly pitch. TRIGGER IF: user mentions ANY competitor by name (Intercom, Zendesk, Freshdesk, etc.) OR asks "how to improve" their customer support.
+   - `use_case_refinement`: User asks specifically how Mochan-D works for THEIR business/use case (e.g., "How does Mochan-D handle X for my Y?", "Can Mochan-D do Z?"). TRIGGER IF: user mentions "Mochan-D" AND their specific business scenario in the same query. Also trigger if conversation history shows prior Mochan-D discussion and user is now drilling into specifics.
+   - `solution_proposal`: Use case detailing is done from prior turns; now propose a concrete solution, pricing, or a customized workaround ("jugaad") if the standard offering isn't enough.
+   - `demo_cta`: User is satisfied with the solution or says "let's proceed" / "I'm interested" / "sign me up". Provide a CTA like a demo link, video, or appointment booking.
+   - `payment_invoice`: The deal is closing; user is asking to pay, mentions payment/Razorpay, has paid, or needs a receipt/invoice.
+
+   IMPORTANT STAGE RULES:
+   - Do NOT stay stuck in `info_gathering` when user is already asking about Mochan-D capabilities for their specific use case — that is `use_case_refinement`.
+   - Competitor comparison or mention = `hook_pitch` (opportunity to position Mochan-D).
+   - If user explicitly says they are satisfied, interested, or ready to proceed = `demo_cta`.
 
 4. TOOL SELECTION FOR MULTI-TASK QUERIES:
 
@@ -1279,7 +1300,12 @@ Return ONLY valid JSON:
         - `use_case_refinement`: They are interested. Detail how Mochan-D applies exactly to their setup. Refine the use case conversationally.
         - `solution_proposal`: Pitch a concrete solution. If they aren't fully satisfied, offer a custom feature/refinement or "jugaad" to benefit them similarly.
         - `demo_cta`: Provide a clear Call To Action (e.g., a mock link to a Sales ROI Dashboard Demo, a Video, or booking an Appointment: "Let's book a demo here: [Demo Link]").
-        - `payment_invoice`: If they are ready to pay, provide a mock Razorpay payment link. If they confirm payment, generate a text-based "Receipt / Invoice" confirming the sale.
+        - `payment_invoice`: If they are ready to pay, provide a MOCK/PLACEHOLDER payment link like "[Payment Link - Our team will send this to you]". NEVER generate a real-looking URL with razorpay.com, rzp.io, or any real payment domain. If they confirm payment, generate a text-based "Receipt / Invoice" confirming the sale.
+
+        ⚠️ PAYMENT LINK SAFETY:
+        - NEVER output URLs containing razorpay.com/pay/, rzp.io/, paytm.com, or any real payment gateway domain.
+        - Only use clearly fake placeholder text like "[Mock Payment Link]" or "[Payment link will be shared by our team]".
+        - If user demands a "real" payment link, explain that a team member will share the secure link directly.
 
         SALES TECHNIQUES:
         - Empathy Hook: "Sounds like..." / "That's rough, yaar..."
@@ -1586,6 +1612,14 @@ Return ONLY valid JSON:
         
         # Fix formatting for display
         response = response.replace('- ', '-')
+        
+        # SAFETY: Strip real payment gateway URLs to prevent hallucination
+        import re
+        payment_domains = ["razorpay.com/pay", "rzp.io", "paytm.com", "paypal.com/pay", "stripe.com/pay"]
+        for domain in payment_domains:
+            pattern = r"https?://[^\s]*" + re.escape(domain) + r"[^\s]*"
+            response = re.sub(pattern, "[Payment link will be shared by our team]", response)
+        
         response = response.strip()
         
         return response
